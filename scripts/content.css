@@ -1,0 +1,16 @@
+#ocado-allergen-banner.flag {
+    background-color: #fbb;
+    padding: 8px;
+    font-size: 125%;
+    border: solid 1px red;
+}
+
+#ocado-allergen-banner.message {
+    background-color: #dfd;
+    padding: 8px;
+    border: solid 1px green;
+}
+
+#ocado-allergen-banner.hidden {
+    display: none;
+}
