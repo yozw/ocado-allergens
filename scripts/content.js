@@ -2,16 +2,7 @@ const BANNER_ID = 'ocado-allergen-banner';
 const BANNER_FLAG_CSS_CLASS = 'flag';
 const BANNER_MESSAGE_CSS_CLASS = 'message';
 const BANNER_HIDDEN_CSS_CLASS = 'hidden';
-const ALLERGENS = ['egg', 'peanut'];
-
-function getIngredients() {
-  for (let element of document.querySelectorAll('.gn-accordionElement')) {
-    if (element.innerText.startsWith('Ingredients')) {
-      return element.innerText;
-    }
-  }
-  return "";
-}
+const ALLERGENS = ['egg'];
 
 function getBannerElement() {
   const mainContent = document.querySelector('#main-content');
@@ -40,12 +31,20 @@ function hideBanner(html) {
   }
 }
 
+let observerStackDepth = 1;
+
 function enableObserver() {
-  observer.observe(document, { childList: true, subtree: true });
+  observerStackDepth--;
+  if (observerStackDepth === 0) {
+    observer.observe(document, { childList: true, subtree: true });
+  }
 }
 
 function disableObserver() {
-  observer.disconnect();
+  if (observerStackDepth === 0) {
+    observer.disconnect();
+  }
+  observerStackDepth++;
 }
 
 function findAllergens(ingredients, allergens) {
@@ -59,13 +58,25 @@ function findAllergens(ingredients, allergens) {
   return result;
 }
 
-function updateAllergenBanner() {
+async function fetchIngredients(url) {
+  return chrome.runtime.sendMessage({sender: "ocado-allergens", url: url});
+}
+
+async function updateAllergenBanner() {
   if (!document.URL.startsWith('https://www.ocado.com/products/')) {
     hideBanner();
     return;
   }
 
-  const ingredients = getIngredients();
+  const ingredientsDict = await fetchIngredients(document.URL);
+
+  let ingredients = "";
+  for (const [key, value] of Object.entries(ingredientsDict)) {
+    ingredients += "\n" + value.content;
+  }
+
+  console.log(ingredients);
+
   const allergens = findAllergens(ingredients, ALLERGENS);
 
   if (ingredients === '') {
@@ -77,10 +88,10 @@ function updateAllergenBanner() {
   }
 }
 
-const observer = new MutationObserver(function(mutations) { 
+const observer = new MutationObserver(async function(mutations) { 
   disableObserver();
   try {
-    updateAllergenBanner();
+    await updateAllergenBanner();
   } finally {
     enableObserver();
   }
