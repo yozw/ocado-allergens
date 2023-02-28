@@ -37,18 +37,26 @@ function crawlContent(url) {
     .then(response => (response !== null) ? response : {});
 }
 
+function cleanUrl(url) {
+  const urlObj = new URL(url);
+  urlObj.search = '';
+  urlObj.hash = '';
+  return urlObj.toString();
+}
+
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.sender === "ocado-allergens") {
-      if (cache[request.url] !== undefined) {
-        sendResponse(cache[request.url]);
+      url = cleanUrl(request.url);
+      if (cache[url] !== undefined) {
+        sendResponse(cache[url]);
         return false;
       } else {
         function saveToCache(response) {
-          cache[request.url] = response;
+          cache[url] = response;
           return response;
         }
-        crawlContent(request.url).then(saveToCache).then(sendResponse);
+        crawlContent(url).then(saveToCache).then(sendResponse);
         return true;
       }
     }

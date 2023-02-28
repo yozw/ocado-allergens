@@ -47,42 +47,76 @@ function disableObserver() {
   observerStackDepth++;
 }
 
-function findAllergens(ingredients, allergens) {
-  ingredients = ingredients.toLowerCase();
-  const result = [];
-  for (let allergen of allergens) {
-    if (ingredients.includes(allergen.toLowerCase())) {
-      result.push(allergen);
+async function fetchIngredients(url) {
+  return chrome.runtime.sendMessage({sender: "ocado-allergens", url: url});
+}
+
+function findAllergens(ingredients) {
+  const result = new Set();
+  for (const [key, value] of Object.entries(ingredients)) {
+    let line = value.content.toLowerCase();
+    for (let allergen of ALLERGENS) {
+      if (line.includes(allergen.toLowerCase())) {
+        result.add(allergen);
+      }
     } 
   }
   return result;
 }
 
-async function fetchIngredients(url) {
-  return chrome.runtime.sendMessage({sender: "ocado-allergens", url: url});
+function isProductPage(url) {
+  return url.startsWith('https://www.ocado.com/products/') || url.startsWith('https://www.ocado.com/webshop/product/');
 }
 
-async function updateAllergenBanner() {
-  if (!document.URL.startsWith('https://www.ocado.com/products/')) {
+async function updateLink(link) {
+  const href = link.href;
+  if (!isProductPage(href)) {
+    return;
+  }
+  
+  const content = link.querySelector('.fop-content');
+  if (content === null) {
+    return;
+  }
+
+  content.style.border = '2px dashed black';
+
+  const ingredients = await fetchIngredients(href);
+  const allergens = findAllergens(ingredients);
+  if (allergens.size > 0) {
+    content.style.border = '4px solid red';
+  } else {
+    content.style.border = '2px solid green';
+  }
+}
+
+async function updateLinks() {
+  const links = document.querySelectorAll("a");
+  for (let link of links) {
+    updateLink(link);
+  }
+}
+
+async function updateContent() {
+  if (!document.URL.startsWith('https://www.ocado.com/')) {
+    return;
+  }
+
+  updateLinks();
+
+  if (!isProductPage(document.URL)) {
     hideBanner();
     return;
   }
 
-  const ingredientsDict = await fetchIngredients(document.URL);
+  const ingredients = await fetchIngredients(document.URL);
+  const allergens = findAllergens(ingredients);
 
-  let ingredients = "";
-  for (const [key, value] of Object.entries(ingredientsDict)) {
-    ingredients += "\n" + value.content;
-  }
-
-  console.log(ingredients);
-
-  const allergens = findAllergens(ingredients, ALLERGENS);
-
-  if (ingredients === '') {
+  if (Object.keys(ingredients).length === 0) {
     showBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
-  } else if (allergens.length) {
-    showBanner('<b>CAUTION</b>: This product contains or may contain <b>' + allergens.join(', ') + '</b>.', BANNER_FLAG_CSS_CLASS);
+  } else if (allergens.size > 0) {
+    const allergensString = Array.from(allergens).sort().join(', ');
+    showBanner('<b>CAUTION</b>: This product contains or may contain <b>' + allergensString + '</b>.', BANNER_FLAG_CSS_CLASS);
   } else {
     showBanner('No allergens found in ingredient list. Please double check!', BANNER_MESSAGE_CSS_CLASS);
   }
@@ -91,7 +125,7 @@ async function updateAllergenBanner() {
 const observer = new MutationObserver(async function(mutations) { 
   disableObserver();
   try {
-    await updateAllergenBanner();
+    await updateContent();
   } finally {
     enableObserver();
   }

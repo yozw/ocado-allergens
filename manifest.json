@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ocado Allergen Flags",
-  "version": "0.0.0.1",
+  "version": "0.0.0.2",
   "description": "Adds allergen flags to Ocado pages",
   "icons": {
     "16": "images/icon-16.png",
