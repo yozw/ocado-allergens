@@ -1,4 +1,4 @@
-var cache = {};
+const cache = {};
 
 function extractInitialStateFromPageContent(text) {
   const PREFIX = 'window.INITIAL_STATE =';
@@ -31,6 +31,8 @@ function getIngredientsFromInitialState(state) {
 }
 
 function crawlContent(url) {
+  // TODO: Retrieve from storage
+  console.log('Retrieving ' + url);
   return fetch(url).then(response => response.text())
     .then(extractInitialStateFromPageContent)
     .then(getIngredientsFromInitialState)
@@ -41,24 +43,24 @@ function cleanUrl(url) {
   const urlObj = new URL(url);
   urlObj.search = '';
   urlObj.hash = '';
-  return urlObj.toString();
+  url = urlObj.toString();
+  if (url.startsWith('https://www.ocado.com/webshop/product/')) {
+    const tokens = url.split('/');
+    const productId = tokens[tokens.length - 2].toLowerCase() + '-' + tokens[tokens.length - 1];
+    url = 'https://www.ocado.com/products/' + productId;
+  }
+  return url;
 }
 
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.sender === "ocado-allergens") {
-      url = cleanUrl(request.url);
-      if (cache[url] !== undefined) {
-        sendResponse(cache[url]);
-        return false;
-      } else {
-        function saveToCache(response) {
-          cache[url] = response;
-          return response;
-        }
-        crawlContent(url).then(saveToCache).then(sendResponse);
-        return true;
-      }
+      const url = cleanUrl(request.url);
+      if (cache[url] === undefined) {
+        cache[url] = crawlContent(url);
+      } 
+      cache[url].then(sendResponse);
+      return true;
     }
   }
 );
