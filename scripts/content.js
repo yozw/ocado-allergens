@@ -95,9 +95,9 @@ async function updateAllergenFlag(link) {
   const allergens = findAllergens(ingredients);
 
   if (allergens.size > 0) {
-    link.flag = 'red';
+    link.flag = 'flag';
   } else {
-    link.flag = 'green';
+    link.flag = 'check';
   }
   invalidateUI();
 }
@@ -106,6 +106,8 @@ function installLinkObserver(link) {
   if (link.observer !== undefined) {
     return;
   }
+
+  link.flag = 'loading';
 
   link.observer = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
@@ -160,6 +162,21 @@ const mutationObserver = createMutationObserver();
  * USER INTERFACE UPDATE LOOP *
  ******************************/
 
+function setOneOfClass(element, prefix, postfix) {
+  const newClassName = prefix + postfix;
+  let needsAdding = true;
+  for (const className of element.classList) {
+    if (className == newClassName) {
+      needsAdding = false;
+    } else if (className.startsWith(prefix)) {
+      element.classList.remove(className);
+    }
+  }
+  if (needsAdding) {
+    element.classList.add(newClassName);
+  }
+}
+
 function updateUserInterface() {
   if (!userInterfaceNeedUpdating) {
     return;
@@ -168,13 +185,9 @@ function updateUserInterface() {
   try {
     updateBanner();
     for (var link of linksSeen) {
-      const content = link.querySelector('.fop-content');
-      if (content !== null) {
-        if (link.flag === undefined) {
-          content.style.border = '1px dashed black';
-        } else {
-          content.style.border = '4px solid ' + link.flag;
-        }
+      const content = link.querySelector('.fop-img-wrapper');
+      if ((content !== null) && (link.flag !== undefined)) {
+        setOneOfClass(content, 'ocado-allergen-', link.flag);
       }
     }
   } finally {

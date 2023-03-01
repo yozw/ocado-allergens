@@ -14,3 +14,37 @@
 #ocado-allergen-banner.hidden {
     display: none;
 }
+
+.ocado-allergen-flag::after, .ocado-allergen-loading::after, .ocado-allergen-check::after {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  bottom: 24px;
+  right: 0px;
+  border: 1px solid;
+  border-radius: 4px; 
+  background-color: white;
+  color: white;
+  font-size: 24px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.ocado-allergen-loading::after {
+  content: "\B7\B7\B7";
+  background-color: #888;
+  border-color: #444;
+}
+
+.ocado-allergen-flag::after {
+  content: "\2691";
+  background-color: #f44;
+  border-color: #c00;
+}
+
+.ocado-allergen-check::after {
+  content: "\2713";
+  background-color: #4a4;
+  border-color: #0c0;
+}
