@@ -30,14 +30,49 @@ function getIngredientsFromInitialState(state) {
   return null;
 }
 
-function crawlContent(url) {
-  // TODO: Retrieve from storage
-  console.log('Retrieving ' + url);
-  return fetch(url).then(response => response.text())
-    .then(extractInitialStateFromPageContent)
-    .then(getIngredientsFromInitialState)
-    .then(response => (response !== null) ? response : {});
+function fetchFromStorage(key) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.storage.local.get([key], (result) => {
+        resolve(result[key]);
+      });
+    }
+    catch (err) {
+      reject(err);
+    }
+  });
 }
+
+function saveToStorage(key, value) {
+  return new Promise((resolve, reject) => {
+    try {
+      const data = {};
+      data[key] = value;
+      chrome.storage.local.set(data, resolve);
+    }
+    catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function crawlContent(url) {
+  const key = 'ingredients::' + url;
+  const result = await fetchFromStorage(key);
+  if (result !== undefined) {
+    return result
+  }
+  const response = await fetch(url);
+  const text = await response.text();
+  const initialState = extractInitialStateFromPageContent(text);
+  let ingredients = getIngredientsFromInitialState(initialState, {});
+  if (ingredients === null) {
+    ingredients = {};
+  }
+  saveToStorage(key, ingredients);
+  return ingredients;
+}
+
 
 function cleanUrl(url) {
   const urlObj = new URL(url);
