@@ -5,7 +5,7 @@ const BANNER_HIDDEN_CSS_CLASS = 'hidden';
 const ALLERGENS = ['egg'];
 
 let userInterfaceNeedUpdating = false;
-const banner = {text: '', cssClass: ''};
+const banner = {text: '', cssClass: '', needsUpdating: false};
 const linksSeen = [];
 
 /*********************
@@ -34,16 +34,20 @@ function getBannerElement() {
   return element;
 }
 
+function setBanner(text, cssClass) {
+  banner.text = text;
+  banner.cssClass = (text !== '') ? cssClass : BANNER_HIDDEN_CSS_CLASS;
+  invalidateUI();
+}
+
 function updateBanner() {
-  const bannerElement = getBannerElement();
-  if (bannerElement === null) {
-    return;
-  }
-  if (banner.text === '') {
-    bannerElement.className = BANNER_HIDDEN_CSS_CLASS;
-  } else {
-    bannerElement.className = banner.cssClass;
-    bannerElement.innerHTML = banner.text;
+  if (banner.needsUpdating) {
+    const bannerElement = getBannerElement();
+    if (bannerElement !== null) {
+      banner.needsUpdating = false;
+      bannerElement.className = banner.cssClass;
+      bannerElement.innerHTML = banner.text;
+    }
   }
 }
 
@@ -52,15 +56,12 @@ async function updateProductAllergenBanner() {
   const allergens = findAllergens(ingredients);
 
   if (Object.keys(ingredients).length === 0) {
-    banner.text = 'No ingredient information available for this product.'
-    banner.cssClass = BANNER_FLAG_CSS_CLASS;
+    setBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
   } else if (allergens.size > 0) {
     const allergensString = Array.from(allergens).sort().join(', ');
-    banner.text = '<b>CAUTION</b>: This product contains or may contain <b>' + allergensString + '</b>.';
-    banner.cssClass = BANNER_FLAG_CSS_CLASS;
+    setBanner('<b>CAUTION</b>: This product contains or may contain <b>' + allergensString + '</b>.', BANNER_FLAG_CSS_CLASS);
   } else {
-    banner.text = 'No allergens found in ingredient list. Please double check!';
-    banner.cssClass = BANNER_MESSAGE_CSS_CLASS;
+    setBanner('No allergens found in ingredient list. Please double check!', BANNER_MESSAGE_CSS_CLASS);
   }
   invalidateUI();
 }
@@ -142,7 +143,7 @@ function createMutationObserver() {
     if (isProductPage(document.URL)) {
       updateProductAllergenBanner();
     } else {
-      banner.text = '';
+      setBanner('');
       installLinkObservers();
     }
   });
@@ -197,6 +198,7 @@ function updateUserInterface() {
 
 function invalidateUI() {
   userInterfaceNeedUpdating = true;
+  banner.needsUpdating = true;
 }
 
 function enableUserInterfaceUpdateTimer() {
