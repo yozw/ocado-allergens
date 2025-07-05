@@ -185,11 +185,20 @@ function updateUserInterface() {
   disableMutationObserver();
   try {
     updateBanner();
+    // TODO: Put the image in a div.
     for (var link of linksSeen) {
-      const content = link.querySelector('.fop-img-wrapper');
-      if ((content !== null) && (link.flag !== undefined)) {
-        setOneOfClass(content, 'ocado-allergen-', link.flag);
+      if (link.flag === undefined) {
+        continue;
       }
+      const img = link.querySelector('img');
+      if (img === null) {
+        continue;
+      }
+      const parent = img.parentNode;
+      if (parent === null) {
+        continue;
+      }
+      setOneOfClass(parent, 'ocado-allergen-', link.flag);
     }
   } finally {
     enableMutationObserver();
