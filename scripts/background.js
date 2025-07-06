@@ -1,14 +1,14 @@
 /*
 TODO:
 
-* Read product titles.
-* Products have Allergen Information and Dietary Information. Read that content too.
+* We should really only look for whole words. Currently "parmeggiano" matches "egg".
+* We should prioritise certain pieces of information. E.g. if ingredients and allergens
+  say there's no egg in it, we don't need to look at other evidence.
 
 */
-
 const cache = {};
-const DEBUG = true;
-const ENABLE_STORAGE = false;
+const DEBUG = false;
+const ENABLE_STORAGE = true;
 
 function log_debug(...args) {
   if (DEBUG) {
@@ -16,7 +16,14 @@ function log_debug(...args) {
   }
 }
 
-function extractInitialStateFromPageContent(text, url) {
+/**
+ * Extracts data from an Ocado page.
+ * 
+ * The data is conveniently stored in a JSON dictionary inside a <script> tag.
+ *
+ * Returns a nested structure of primitives, arrays, and dictionaries.
+ **/
+function extractPageData(text, url) {
   const regex = /<script data-test="initial-state-script"[^>]*>window\.__INITIAL_STATE__\s*=\s*({.*?})<\/script>/s;
 
   for (let line of text.split('\n')) {
@@ -25,45 +32,51 @@ function extractInitialStateFromPageContent(text, url) {
       continue;
     }
     const jsonString = match[1];
-    let data = JSON.parse(jsonString);
-    log_debug("Fetched initial state from", url, ":", data);
-    return data;
+    let pageData = JSON.parse(jsonString);
+    log_debug("Fetched page data (initial state) from", url, ":", pageData);
+    return pageData;
   }
-  log_debug('No initial state found in', url);
+  log_debug('No page data (initial state) found in', url);
   return {};
 }
 
-function findIngredientsContent(obj) {
-  if (obj === null || typeof obj !== 'object') {
+/**
+ * Extracts fields from pageData that may contain ingredient information about the product.
+ * 
+ * Take the pageData, and a list to which to append ingredient information (strings).
+ **/
+function extractIngredientData(pageData, outputList) {
+  if (pageData === null || typeof pageData !== 'object') {
     return undefined;
   }
-  if (obj.hasOwnProperty('title') && obj.title === 'ingredients' && obj.hasOwnProperty('content')) {
-    return obj.content;
+  if (pageData.hasOwnProperty('content') && pageData.hasOwnProperty('title')) {
+    if (pageData.title === 'ingredients' || pageData.title === 'otherInformation' 
+      || pageData.title === 'dietaryInformation' || pageData.title === 'allergens') {
+      outputList.push(pageData.content);
+    } else {
+      log_debug('Found content with title', pageData.title, ':', pageData.content);
+    }
+  } else if (pageData.hasOwnProperty('detailedDescription')) {
+    outputList.push(pageData.detailedDescription);
   }
 
-
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      const result = findIngredientsContent(obj[i]);
-      if (result !== undefined) {
-        return result;
-      }
+  if (Array.isArray(pageData)) {
+    for (let i = 0; i < pageData.length; i++) {
+      extractIngredientData(pageData[i], outputList);
     }
   }
   else {
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        const result = findIngredientsContent(obj[key]);
-        if (result !== undefined) {
-          return result;
-        }
+    for (const key in pageData) {
+      if (Object.prototype.hasOwnProperty.call(pageData, key)) {
+        extractIngredientData(pageData[key], outputList);
       }
     }
   }
-
-  return undefined;
 }
 
+/**
+ * Fetches a value cooresponding to a key from local storage.
+ **/
 function fetchFromStorage(key) {
   return new Promise((resolve, reject) => {
     try {
@@ -77,10 +90,10 @@ function fetchFromStorage(key) {
   });
 }
 
+/**
+ * Stores a value corresponding to a key in local storage.
+ **/
 function saveToStorage(key, value) {
-  if (value !== null && typeof(value) !== "string") {
-    throw new Error("Expected value to be a string or null.");
-  }
   return new Promise((resolve, reject) => {
     try {
       const data = {};
@@ -93,6 +106,9 @@ function saveToStorage(key, value) {
   });
 }
 
+/**
+ * Crawls the content of the give page and returns ingredient information in it.
+ **/
 async function crawlContent(url) {
   const key = 'ingredients::' + url;
   if (ENABLE_STORAGE) {
@@ -105,19 +121,23 @@ async function crawlContent(url) {
   log_debug('Fetching', url);
   const response = await fetch(url);
   const text = await response.text();
-  const initialState = extractInitialStateFromPageContent(text, url);
-  let ingredients = findIngredientsContent(initialState);
-  if (!ingredients) {
+  const pageData = extractPageData(text, url);
+  let ingredients = [];
+  extractIngredientData(pageData, ingredients);
+  if (ingredients.length === 0) {
     log_debug("No ingredient information for", url);
-    ingredients = null;
   } else {
     log_debug("Found ingredient information for", url, ":", ingredients);
   }
-  saveToStorage(key, ingredients);
+  if (ENABLE_STORAGE) {
+    saveToStorage(key, ingredients);
+  }
   return ingredients;
 }
 
-
+/**
+ * Returns a clean, canonical version of the URL.
+ */
 function cleanUrl(url) {
   const urlObj = new URL(url);
   urlObj.search = '';
@@ -131,6 +151,7 @@ function cleanUrl(url) {
   return url;
 }
 
+// Install an event listener that responds to events receive from content.js.
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.sender === "ocado-allergens") {

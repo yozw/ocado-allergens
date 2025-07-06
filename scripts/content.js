@@ -10,7 +10,7 @@ const BANNER_FLAG_CSS_CLASS = 'flag';
 const BANNER_MESSAGE_CSS_CLASS = 'message';
 const BANNER_HIDDEN_CSS_CLASS = 'hidden';
 const ALLERGENS = ['egg'];
-const DEBUG = true;
+const DEBUG = false;
 
 let userInterfaceNeedUpdating = false;
 const banner = {text: '', cssClass: '', needsUpdating: false};
@@ -68,7 +68,7 @@ function updateBanner() {
 
 async function updateProductAllergenBanner() {
   const ingredients = await fetchIngredients(document.URL);
-  if (!ingredients) {
+  if (ingredients.length === 0) {
     setBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
     return;    
   }
@@ -93,10 +93,12 @@ async function fetchIngredients(url) {
 
 function findAllergens(ingredients) {
   const result = new Set();
-  let line = ingredients.toLowerCase();
-  for (let allergen of ALLERGENS) {
-    if (line.includes(allergen.toLowerCase())) {
-      result.add(allergen);
+  for (let i = 0; i < ingredients.length; ++i) {
+    let line = ingredients[i].toLowerCase();
+    for (let allergen of ALLERGENS) {
+      if (line.includes(allergen.toLowerCase())) {
+        result.add(allergen);
+      }
     }
   } 
   return result;
@@ -108,7 +110,7 @@ function findAllergens(ingredients) {
 
 async function updateAllergenFlag(link) {
   const ingredients = await fetchIngredients(link.href);
-  if (!ingredients) {
+  if (ingredients.length === 0) {
     link.flag = 'unknown';
   } else {
     const allergens = findAllergens(ingredients);
