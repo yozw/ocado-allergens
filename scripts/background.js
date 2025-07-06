@@ -1,33 +1,66 @@
-const cache = {};
+/*
+TODO:
 
-function extractInitialStateFromPageContent(text) {
-  const PREFIX = 'window.INITIAL_STATE =';
+* Move debug logging into a separate function.
+* Read product titles.
+* Products have Allergen Information and Dietary Information. Read that content too.
+
+*/
+
+const cache = {};
+const DEBUG = true;
+const ENABLE_STORAGE = false;
+
+function extractInitialStateFromPageContent(text, url) {
+  const regex = /<script data-test="initial-state-script"[^>]*>window\.__INITIAL_STATE__\s*=\s*({.*?})<\/script>/s;
 
   for (let line of text.split('\n')) {
-    line = line.trim();
-    if (!line.startsWith(PREFIX)) {
+    const match = line.match(regex);
+    if (!match || !match[1]) {
       continue;
     }
-    let data = JSON.parse(line.slice(PREFIX.length, -1));
+    const jsonString = match[1];
+    let data = JSON.parse(jsonString);
+    if (DEBUG) {
+      console.log("Fetched initial state from", url, ":", data);
+    }
     return data;
+  }
+  if (DEBUG) {
+    console.log('No initial state found in', url);
   }
   return {};
 }
 
-function getIngredientsFromInitialState(state) {
-  if ((state === null) || (state.constructor !== Object)) {
-    return null;
+function findIngredientsContent(obj) {
+  if (obj === null || typeof obj !== 'object') {
+    return undefined;
   }
-  if (state.ingredients) {
-    return state.ingredients;
+  if (obj.hasOwnProperty('title') && obj.title === 'ingredients' && obj.hasOwnProperty('content')) {
+    return obj.content;
   }
-  for (const [key, value] of Object.entries(state)) {
-    const returnValue = getIngredientsFromInitialState(value);
-    if (returnValue !== null) {
-      return returnValue;
+
+
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      const result = findIngredientsContent(obj[i]);
+      if (result !== undefined) {
+        return result;
+      }
     }
   }
-  return null;
+  else {
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const result = findIngredientsContent(obj[key]);
+        if (result !== undefined) {
+          return result;
+        }
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function fetchFromStorage(key) {
@@ -44,6 +77,9 @@ function fetchFromStorage(key) {
 }
 
 function saveToStorage(key, value) {
+  if (value !== null && typeof(value) !== "string") {
+    throw new Error("Expected value to be a string or null.");
+  }
   return new Promise((resolve, reject) => {
     try {
       const data = {};
@@ -58,16 +94,29 @@ function saveToStorage(key, value) {
 
 async function crawlContent(url) {
   const key = 'ingredients::' + url;
-  const result = await fetchFromStorage(key);
-  if (result !== undefined) {
-    return result
+  if (ENABLE_STORAGE) {
+    const result = await fetchFromStorage(key);
+    if (result !== undefined) {
+        if (DEBUG) {
+          console.log('Fetched ingredients for', url, 'from storage');
+        } 
+      return result
+    }
+  }
+  if (DEBUG) {
+    console.log('Fetching', url);
   }
   const response = await fetch(url);
   const text = await response.text();
-  const initialState = extractInitialStateFromPageContent(text);
-  let ingredients = getIngredientsFromInitialState(initialState, {});
-  if (ingredients === null) {
-    ingredients = {};
+  const initialState = extractInitialStateFromPageContent(text, url);
+  let ingredients = findIngredientsContent(initialState);
+  if (!ingredients) {
+    if (DEBUG) {
+      console.log("No ingredient information for", url);
+    }
+    ingredients = null;
+  } else {
+    console.log("Found ingredient information for", url, ":", ingredients);
   }
   saveToStorage(key, ingredients);
   return ingredients;
@@ -79,10 +128,10 @@ function cleanUrl(url) {
   urlObj.search = '';
   urlObj.hash = '';
   url = urlObj.toString();
-  if (url.startsWith('https://www.ocado.com/webshop/product/')) {
+  if (url.startsWith('https://ww2.ocado.com/webshop/product/')) {
     const tokens = url.split('/');
     const productId = tokens[tokens.length - 2].toLowerCase() + '-' + tokens[tokens.length - 1];
-    url = 'https://www.ocado.com/products/' + productId;
+    url = 'https://ww2.ocado.com/products/' + productId;
   }
   return url;
 }

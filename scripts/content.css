@@ -15,7 +15,7 @@
     display: none;
 }
 
-.ocado-allergen-flag::after, .ocado-allergen-loading::after, .ocado-allergen-check::after {
+.ocado-allergen-flag::after, .ocado-allergen-loading::after, .ocado-allergen-check::after, .ocado-allergen-unknown::after {
   position: absolute;
   display: block;
   width: 24px;
@@ -48,4 +48,10 @@
   content: "\2713";
   background-color: #4a4;
   border-color: #0c0;
+}
+
+.ocado-allergen-unknown::after {
+  content: "?";
+  background-color: #44a;
+  border-color: #00c;
 }

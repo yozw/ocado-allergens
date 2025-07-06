@@ -1,8 +1,16 @@
+/*
+
+TODO:
+
+* Trolley page does not show flags (only if you click on an item).
+*/
+
 const BANNER_ID = 'ocado-allergen-banner';
 const BANNER_FLAG_CSS_CLASS = 'flag';
 const BANNER_MESSAGE_CSS_CLASS = 'message';
 const BANNER_HIDDEN_CSS_CLASS = 'hidden';
 const ALLERGENS = ['egg'];
+const DEBUG = true;
 
 let userInterfaceNeedUpdating = false;
 const banner = {text: '', cssClass: '', needsUpdating: false};
@@ -13,7 +21,8 @@ const linksSeen = [];
  *********************/
 
 function isProductPage(url) {
-  return url.startsWith('https://www.ocado.com/products/') || url.startsWith('https://www.ocado.com/webshop/product/');
+  return url.startsWith('https://www.ocado.com/products/') || url.startsWith('https://www.ocado.com/webshop/product/')
+  || url.startsWith('https://ww2.ocado.com/products/') || url.startsWith('https://ww2.ocado.com/webshop/product/');
 }
 
 /*******************
@@ -21,7 +30,7 @@ function isProductPage(url) {
  *******************/
 
 function getBannerElement() {
-  const mainContent = document.querySelector('#main-content');
+  const mainContent = document.querySelector('#main');
   if (!mainContent) {
     return null;
   }
@@ -53,17 +62,19 @@ function updateBanner() {
 
 async function updateProductAllergenBanner() {
   const ingredients = await fetchIngredients(document.URL);
+  if (!ingredients) {
+    setBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
+    return;    
+  }
+
   const allergens = findAllergens(ingredients);
 
-  if (Object.keys(ingredients).length === 0) {
-    setBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
-  } else if (allergens.size > 0) {
+  if (allergens.size > 0) {
     const allergensString = Array.from(allergens).sort().join(', ');
     setBanner('<b>CAUTION</b>: This product contains or may contain <b>' + allergensString + '</b>.', BANNER_FLAG_CSS_CLASS);
   } else {
     setBanner('No allergens found in ingredient list. Please double check!', BANNER_MESSAGE_CSS_CLASS);
   }
-  invalidateUI();
 }
 
 /************************************
@@ -76,14 +87,12 @@ async function fetchIngredients(url) {
 
 function findAllergens(ingredients) {
   const result = new Set();
-  for (const [key, value] of Object.entries(ingredients)) {
-    let line = value.content.toLowerCase();
-    for (let allergen of ALLERGENS) {
-      if (line.includes(allergen.toLowerCase())) {
-        result.add(allergen);
-      }
-    } 
-  }
+  let line = ingredients.toLowerCase();
+  for (let allergen of ALLERGENS) {
+    if (line.includes(allergen.toLowerCase())) {
+      result.add(allergen);
+    }
+  } 
   return result;
 }
 
@@ -93,12 +102,16 @@ function findAllergens(ingredients) {
 
 async function updateAllergenFlag(link) {
   const ingredients = await fetchIngredients(link.href);
-  const allergens = findAllergens(ingredients);
-
-  if (allergens.size > 0) {
-    link.flag = 'flag';
+  if (!ingredients) {
+    link.flag = 'unknown';
   } else {
-    link.flag = 'check';
+    const allergens = findAllergens(ingredients);
+
+    if (allergens.size > 0) {
+      link.flag = 'flag';
+    } else {
+      link.flag = 'check';
+    }
   }
   invalidateUI();
 }
@@ -111,10 +124,12 @@ function installLinkObserver(link) {
   link.flag = 'loading';
 
   link.observer = new IntersectionObserver((entries, observer) => {
+    console.log("Looking for product links");
     entries.forEach(entry => {
       if (entry.intersectionRatio > 0) {
         link.observer.disconnect();
         link.observer = null;
+        console.log("Found a link to a product:", link);
         linksSeen.push(link);
         updateAllergenFlag(link);
       }
@@ -144,8 +159,8 @@ function createMutationObserver() {
       updateProductAllergenBanner();
     } else {
       setBanner('');
-      installLinkObservers();
     }
+    installLinkObservers();
   });
 }
 
@@ -190,12 +205,14 @@ function updateUserInterface() {
       if (link.flag === undefined) {
         continue;
       }
-      const img = link.querySelector('img');
-      if (img === null) {
+      const parent = link.parentNode;
+      if (!parent) {
+        if (DEBUG) {
+          console.log("Could not determine the parent of the anchor")
+        }
         continue;
       }
-      const parent = img.parentNode;
-      if (parent === null) {
+      if (parent.classList.contains("title-container")) {
         continue;
       }
       setOneOfClass(parent, 'ocado-allergen-', link.flag);
@@ -214,7 +231,7 @@ function enableUserInterfaceUpdateTimer() {
   window.setInterval(updateUserInterface, 50);
 }
 
-if (document.URL.startsWith('https://www.ocado.com/')) {
+if (document.URL.startsWith('https://www.ocado.com/') || document.URL.startsWith('https://ww2.ocado.com/')) {
   enableMutationObserver();
   enableUserInterfaceUpdateTimer();
 }

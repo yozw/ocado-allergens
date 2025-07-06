@@ -19,7 +19,8 @@
       "js": ["scripts/content.js"],
       "css": ["scripts/content.css"],
       "matches": [
-        "https://www.ocado.com/*"
+        "https://www.ocado.com/*",
+        "https://ww2.ocado.com/*"
       ]
     }
   ]
