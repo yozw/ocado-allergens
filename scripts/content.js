@@ -40,13 +40,15 @@ function getBannerElement() {
   if (!mainContent) {
     return null;
   }
-  let element = document.querySelector('#' + BANNER_ID);
-  if (element === null) {
-    element = document.createElement('div');
-    element.id = BANNER_ID;
-    mainContent.insertBefore(element, mainContent.firstChild);
+  const element = document.querySelector('#' + BANNER_ID);
+  if (element) {
+    return element;
   }
-  return element;
+
+  const newElement = document.createElement('div');
+  newElement.id = BANNER_ID;
+  mainContent.insertBefore(newElement, mainContent.firstChild);
+  return newElement;
 }
 
 function setBanner(text, cssClass) {
@@ -108,7 +110,7 @@ function findAllergens(productData) {
   // We go through product data type by type.
   const sections = ['ingredients', 'info'];
 
-  for (let section of sections) {
+  for (const section of sections) {
     const data = productData[section];
     if (data.length === 0) {
       // Consider the next section.
@@ -176,7 +178,7 @@ function installLinkObserver(link) {
 
 function installLinkObservers() {
   const links = document.querySelectorAll("a");
-  for (let link of links) {
+  for (const link of links) {
     if (isProductPage(link.href)) {
       installLinkObserver(link);
     }  
@@ -235,7 +237,6 @@ function updateUserInterface() {
   disableMutationObserver();
   try {
     updateBanner();
-    // TODO: Put the image in a div.
     for (var link of linksSeen) {
       if (link.flag === undefined) {
         continue;

@@ -18,13 +18,13 @@ function log_debug(...args) {
 function extractPageData(text, url) {
   const regex = /<script data-test="initial-state-script"[^>]*>window\.__INITIAL_STATE__\s*=\s*({.*?})<\/script>/s;
 
-  for (let line of text.split('\n')) {
+  for (const line of text.split('\n')) {
     const match = line.match(regex);
     if (!match || !match[1]) {
       continue;
     }
     const jsonString = match[1];
-    let pageData = JSON.parse(jsonString);
+    const pageData = JSON.parse(jsonString);
     log_debug("Fetched page data (initial state) from", url, ":", pageData);
     return pageData;
   }
@@ -58,7 +58,7 @@ function extractProductData(pageData, output) {
   }
 
   if (Array.isArray(pageData)) {
-    for (let subData of pageData) {
+    for (const subData of pageData) {
       extractProductData(subData, output);
     }
   }
@@ -120,7 +120,7 @@ async function fetchProductData(url) {
   const response = await fetch(url);
   const text = await response.text();
   const pageData = extractPageData(text, url);
-  let productData = {'ingredients': [], 'info': []};
+  const productData = {'ingredients': [], 'info': []};
   extractProductData(pageData, productData);
 
   if (productData.length === 0) {
