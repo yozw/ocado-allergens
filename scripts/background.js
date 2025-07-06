@@ -1,11 +1,3 @@
-/*
-TODO:
-
-* We should really only look for whole words. Currently "parmeggiano" matches "egg".
-* We should prioritise certain pieces of information. E.g. if ingredients and allergens
-  say there's no egg in it, we don't need to look at other evidence.
-
-*/
 const cache = {};
 const DEBUG = false;
 const ENABLE_STORAGE = true;
@@ -41,34 +33,39 @@ function extractPageData(text, url) {
 }
 
 /**
- * Extracts fields from pageData that may contain ingredient information about the product.
+ * Extracts product data from pageData that may contain ingredient information about the product.
  * 
- * Take the pageData, and a list to which to append ingredient information (strings).
+ * Take the pageData, and a dictionary to which to append product data. 
+ * The dictionary should have two entries:
+ * - 'ingredients': a list of ingredients information (strings);
+ * - 'info': a list of additional information (strings).
  **/
-function extractIngredientData(pageData, outputList) {
+function extractProductData(pageData, output) {
   if (pageData === null || typeof pageData !== 'object') {
     return undefined;
   }
+
   if (pageData.hasOwnProperty('content') && pageData.hasOwnProperty('title')) {
-    if (pageData.title === 'ingredients' || pageData.title === 'otherInformation' 
-      || pageData.title === 'dietaryInformation' || pageData.title === 'allergens') {
-      outputList.push(pageData.content);
+    if (pageData.title === 'ingredients' || pageData.title === 'allergens') {
+      output.ingredients.push(pageData.content);
+    } else if (pageData.title === 'otherInformation' || pageData.title === 'dietaryInformation') {
+      output.info.push(pageData.content);
     } else {
       log_debug('Found content with title', pageData.title, ':', pageData.content);
     }
   } else if (pageData.hasOwnProperty('detailedDescription')) {
-    outputList.push(pageData.detailedDescription);
+    output.info.push(pageData.detailedDescription);
   }
 
   if (Array.isArray(pageData)) {
-    for (let i = 0; i < pageData.length; i++) {
-      extractIngredientData(pageData[i], outputList);
+    for (let subData of pageData) {
+      extractProductData(subData, output);
     }
   }
   else {
     for (const key in pageData) {
       if (Object.prototype.hasOwnProperty.call(pageData, key)) {
-        extractIngredientData(pageData[key], outputList);
+        extractProductData(pageData[key], output);
       }
     }
   }
@@ -107,32 +104,34 @@ function saveToStorage(key, value) {
 }
 
 /**
- * Crawls the content of the give page and returns ingredient information in it.
+ * Fetches the given page and extracts product data in it.
  **/
-async function crawlContent(url) {
-  const key = 'ingredients::' + url;
+async function fetchProductData(url) {
+  const key = 'product::' + url;
   if (ENABLE_STORAGE) {
     const result = await fetchFromStorage(key);
     if (result !== undefined) {
-        log_debug('Fetched ingredients for', url, 'from storage');
-      return result
+        log_debug('Fetched product data for', url, 'from storage');
+      return result;
     }
   }
+
   log_debug('Fetching', url);
   const response = await fetch(url);
   const text = await response.text();
   const pageData = extractPageData(text, url);
-  let ingredients = [];
-  extractIngredientData(pageData, ingredients);
-  if (ingredients.length === 0) {
-    log_debug("No ingredient information for", url);
+  let productData = {'ingredients': [], 'info': []};
+  extractProductData(pageData, productData);
+
+  if (productData.length === 0) {
+    log_debug("No product data for", url);
   } else {
-    log_debug("Found ingredient information for", url, ":", ingredients);
+    log_debug("Found product data for", url, ":", productData);
   }
   if (ENABLE_STORAGE) {
-    saveToStorage(key, ingredients);
+    saveToStorage(key, productData);
   }
-  return ingredients;
+  return productData;
 }
 
 /**
@@ -157,7 +156,7 @@ chrome.runtime.onMessage.addListener(
     if (request.sender === "ocado-allergens") {
       const url = cleanUrl(request.url);
       if (cache[url] === undefined) {
-        cache[url] = crawlContent(url);
+        cache[url] = fetchProductData(url);
       } 
       cache[url].then(sendResponse);
       return true;

@@ -67,13 +67,13 @@ function updateBanner() {
 }
 
 async function updateProductAllergenBanner() {
-  const ingredients = await fetchIngredients(document.URL);
-  if (ingredients.length === 0) {
-    setBanner('No ingredient information available for this product.', BANNER_FLAG_CSS_CLASS);
+  const productData = await fetchProductData(document.URL);
+  if (productData.length === 0) {
+    setBanner('No product data available for this product.', BANNER_FLAG_CSS_CLASS);
     return;    
   }
 
-  const allergens = findAllergens(ingredients);
+  const allergens = findAllergens(productData);
 
   if (allergens.size > 0) {
     const allergensString = Array.from(allergens).sort().join(', ');
@@ -87,21 +87,45 @@ async function updateProductAllergenBanner() {
  * INGREDIENT AND ALLERGEN FETCHING *
  ************************************/
 
-async function fetchIngredients(url) {
+async function fetchProductData(url) {
   return chrome.runtime.sendMessage({sender: "ocado-allergens", url: url});
 }
 
-function findAllergens(ingredients) {
-  const result = new Set();
-  for (let i = 0; i < ingredients.length; ++i) {
-    let line = ingredients[i].toLowerCase();
-    for (let allergen of ALLERGENS) {
-      if (line.includes(allergen.toLowerCase())) {
-        result.add(allergen);
+function containsWholeWord(mainString, subString) {
+  // Escape special characters in the substring to prevent them from being
+  // interpreted as regex metacharacters.
+  const escapedSubString = subString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Create a regular expression with word boundaries (\b) and case-insensitive flag (i).
+  // \b matches a word boundary. This ensures that "cat" doesn't match "catalogue".
+  const regex = new RegExp(`\\b${escapedSubString}\\b`, 'i');
+
+  // Test if the mainString matches the regex.
+  return regex.test(mainString);
+}
+
+function findAllergens(productData) {
+  // We go through product data type by type.
+  const sections = ['ingredients', 'info'];
+
+  for (let section of sections) {
+    const data = productData[section];
+    if (data.length === 0) {
+      // Consider the next section.
+      continue;
+    }
+
+    const result = new Set();
+    for (const line of data) {
+      for (const allergen of ALLERGENS) {
+        if (containsWholeWord(line, allergen)) {
+          result.add(allergen);
+        }
       }
     }
-  } 
-  return result;
+    return result;
+  }
+  return null;
 }
 
 /************************************
@@ -109,17 +133,20 @@ function findAllergens(ingredients) {
  ************************************/
 
 async function updateAllergenFlag(link) {
-  const ingredients = await fetchIngredients(link.href);
-  if (ingredients.length === 0) {
+  const productData = await fetchProductData(link.href);
+  if (!productData) {
     link.flag = 'unknown';
-  } else {
-    const allergens = findAllergens(ingredients);
+    invalidateUI();
+    return;
+  }
 
-    if (allergens.size > 0) {
-      link.flag = 'flag';
-    } else {
-      link.flag = 'check';
-    }
+  const allergens = findAllergens(productData);
+  if (allergens === null) {
+    link.flag = 'unknown';
+  } else if (allergens.size > 0) {
+    link.flag = 'flag';
+  } else {
+    link.flag = 'check';
   }
   invalidateUI();
 }
