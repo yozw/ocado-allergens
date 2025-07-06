@@ -16,6 +16,12 @@ let userInterfaceNeedUpdating = false;
 const banner = {text: '', cssClass: '', needsUpdating: false};
 const linksSeen = [];
 
+function log_debug(...args) {
+  if (DEBUG) {
+    console.log(...args);
+  }
+}
+
 /*********************
  * UTILITY FUNCTIONS *
  *********************/
@@ -124,12 +130,12 @@ function installLinkObserver(link) {
   link.flag = 'loading';
 
   link.observer = new IntersectionObserver((entries, observer) => {
-    console.log("Looking for product links");
+    log_debug("Looking for product links");
     entries.forEach(entry => {
       if (entry.intersectionRatio > 0) {
         link.observer.disconnect();
         link.observer = null;
-        console.log("Found a link to a product:", link);
+        log_debug("Found a link to a product:", link);
         linksSeen.push(link);
         updateAllergenFlag(link);
       }
@@ -207,9 +213,7 @@ function updateUserInterface() {
       }
       const parent = link.parentNode;
       if (!parent) {
-        if (DEBUG) {
-          console.log("Could not determine the parent of the anchor")
-        }
+        log_debug("Could not determine the parent of the anchor")
         continue;
       }
       if (parent.classList.contains("title-container")) {

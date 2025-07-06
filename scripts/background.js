@@ -1,7 +1,6 @@
 /*
 TODO:
 
-* Move debug logging into a separate function.
 * Read product titles.
 * Products have Allergen Information and Dietary Information. Read that content too.
 
@@ -10,6 +9,12 @@ TODO:
 const cache = {};
 const DEBUG = true;
 const ENABLE_STORAGE = false;
+
+function log_debug(...args) {
+  if (DEBUG) {
+    console.log(...args);
+  }
+}
 
 function extractInitialStateFromPageContent(text, url) {
   const regex = /<script data-test="initial-state-script"[^>]*>window\.__INITIAL_STATE__\s*=\s*({.*?})<\/script>/s;
@@ -21,14 +26,10 @@ function extractInitialStateFromPageContent(text, url) {
     }
     const jsonString = match[1];
     let data = JSON.parse(jsonString);
-    if (DEBUG) {
-      console.log("Fetched initial state from", url, ":", data);
-    }
+    log_debug("Fetched initial state from", url, ":", data);
     return data;
   }
-  if (DEBUG) {
-    console.log('No initial state found in', url);
-  }
+  log_debug('No initial state found in', url);
   return {};
 }
 
@@ -97,26 +98,20 @@ async function crawlContent(url) {
   if (ENABLE_STORAGE) {
     const result = await fetchFromStorage(key);
     if (result !== undefined) {
-        if (DEBUG) {
-          console.log('Fetched ingredients for', url, 'from storage');
-        } 
+        log_debug('Fetched ingredients for', url, 'from storage');
       return result
     }
   }
-  if (DEBUG) {
-    console.log('Fetching', url);
-  }
+  log_debug('Fetching', url);
   const response = await fetch(url);
   const text = await response.text();
   const initialState = extractInitialStateFromPageContent(text, url);
   let ingredients = findIngredientsContent(initialState);
   if (!ingredients) {
-    if (DEBUG) {
-      console.log("No ingredient information for", url);
-    }
+    log_debug("No ingredient information for", url);
     ingredients = null;
   } else {
-    console.log("Found ingredient information for", url, ":", ingredients);
+    log_debug("Found ingredient information for", url, ":", ingredients);
   }
   saveToStorage(key, ingredients);
   return ingredients;
